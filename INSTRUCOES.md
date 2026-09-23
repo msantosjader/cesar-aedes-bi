@@ -36,8 +36,7 @@ aedes-bi/
 │   │   └── recife.geojson
 │   ├── processados/
 │   │   ├── geocodificacao_cache.json
-│   │   ├── inventario_geocodificacao.csv
-│   │   └── nomes_locais_edl.csv
+│   │   └── inventario_geocodificacao.csv
 │   └── auditoria/
 │       ├── auditoria_coordenadas.csv
 │       └── auditoria_datas.csv
@@ -145,6 +144,7 @@ Responsabilidades:
 - detectar faixas inválidas;
 - detectar sinais invertidos;
 - detectar latitude e longitude trocadas;
+- separar latitude e longitude quando vierem na mesma célula;
 - corrigir automaticamente apenas casos inequívocos;
 - registrar toda correção na auditoria.
 
@@ -172,9 +172,8 @@ buscar automaticamente apenas pelo nome da rua quando há número disponível.
 Para todo candidato à geocodificação, o endereço informado deve ser consultado
 primeiro, inclusive quando possui número. Se não houver resultado, o nome do
 estabelecimento pode ser usado como fallback, mantendo bairro e Recife na
-validação. O arquivo
-`data/processados/nomes_locais_edl.csv` registra os nomes extraídos dos EDLs,
-mas não bloqueia a consulta nominal.
+validação. O `nome_local` da própria linha pode ser usado como fallback
+nominal, sem lista prévia de nomes autorizados.
 O endereço original, as partes extraídas e todas as consultas devem permanecer
 no inventário `data/processados/inventario_geocodificacao.csv`.
 

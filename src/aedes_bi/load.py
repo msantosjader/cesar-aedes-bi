@@ -30,7 +30,6 @@ class Load:
         record_audit: pd.DataFrame | None = None,
         id_audit: pd.DataFrame | None = None,
         geocode_inventory: pd.DataFrame | None = None,
-        edl_name_dictionary: pd.DataFrame | None = None,
     ) -> None:
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
         self.audit_dir.mkdir(parents=True, exist_ok=True)
@@ -72,11 +71,6 @@ class Load:
         )
         (geocode_inventory if geocode_inventory is not None else pd.DataFrame()).to_csv(
             self.root / "data" / "processados" / "inventario_geocodificacao.csv",
-            index=False,
-            encoding="utf-8-sig",
-        )
-        (edl_name_dictionary if edl_name_dictionary is not None else pd.DataFrame()).to_csv(
-            self.root / "data" / "processados" / "nomes_locais_edl.csv",
             index=False,
             encoding="utf-8-sig",
         )

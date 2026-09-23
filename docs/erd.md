@@ -83,6 +83,8 @@ erDiagram
 
 - Coordenadas originais nunca são sobrescritas.
 - Coordenadas são tratadas somente quando a correção é segura.
+- Pares de latitude e longitude na mesma célula são separados antes da
+  validação e mantêm a origem rastreável.
 - Pontos fora do Recife até 1 km são mantidos e encaminhados para revisão.
 - Pontos sem coordenada ou fora do Recife a mais de 1 km podem ser
   geocodificados por endereço.
@@ -92,9 +94,7 @@ erDiagram
   alternativas.
 - Para todo candidato à geocodificação, o endereço informado é consultado
   primeiro. Se não houver resultado, o nome do estabelecimento pode ser usado
-  como fallback; `data/processados/nomes_locais_edl.csv` é apenas o inventário
-  dos nomes extraídos dos EDLs. O número original permanece nas consultas de
-  endereço.
+  como fallback. O número original permanece nas consultas de endereço.
 - O inventário externo `data/processados/inventario_geocodificacao.csv`
   registra logradouro, número, complemento, consultas, resultado e motivo de
   revisão dos candidatos.

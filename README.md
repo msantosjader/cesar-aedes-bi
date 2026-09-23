@@ -56,9 +56,6 @@ nome da rua quando o número está disponível.
 Para todo candidato à geocodificação, o endereço informado é consultado
 primeiro, inclusive quando possui número. Se não houver resultado, o nome do
 estabelecimento é usado como fallback, mantendo bairro e Recife na validação.
-O arquivo
-`data/processados/nomes_locais_edl.csv` é um inventário dos nomes extraídos dos
-EDLs, não uma exigência para executar a consulta.
 
 ## Fontes
 
@@ -120,7 +117,9 @@ geográfica usa o limite municipal do Recife em `dentro_recife`,
 As fontes podem apresentar coordenadas em duas colunas ou em uma única célula,
 incluindo formatos decimais, graus/minutos/segundos e indicadores `S`, `W` ou
 `O`. O parser usa somente as colunas de coordenadas e não interpreta números
-encontrados em metadados, como nomes de abas ou linhas de origem. Registros
+encontrados em metadados, como nomes de abas ou linhas de origem. Quando
+latitude e longitude aparecem na mesma célula, o par é separado antes da
+validação. Registros
 fora do Recife permanecem no banco. Aqueles até 1 km do limite são registrados
 para revisão manual; os mais distantes podem ser encaminhados para
 geocodificação por endereço. Coordenadas ausentes ou ambíguas ficam nulas e

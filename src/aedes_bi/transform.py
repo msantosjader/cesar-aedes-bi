@@ -5,7 +5,6 @@ import logging
 import re
 import time
 import unicodedata
-from collections import Counter
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
@@ -30,21 +29,14 @@ class Transform:
         self.record_audit: list[dict[str, Any]] = []
         self.id_audit: list[dict[str, Any]] = []
         self.geocode_inventory: list[dict[str, Any]] = []
-        self.edl_name_keys: set[str] = set()
-        self.edl_name_counts: Counter[str] = Counter()
         self.geocode_enabled = geocode
         self.geocode_cache_path = self.boundary_path.parent.parent / "processados" / "geocodificacao_cache.json" if self.boundary_path else None
         self.geocode_cache: dict[str, dict[str, Any]] = {}
         self.geocode_cache_hits = 0
         self.geocode_http_requests = 0
-        self.name_dictionary_path = self.geocode_cache_path.parent / "nomes_locais_edl.csv" if self.geocode_cache_path else None
         self._last_geocode_request = 0.0
         if self.geocode_cache_path and self.geocode_cache_path.exists():
             self.geocode_cache = json.loads(self.geocode_cache_path.read_text(encoding="utf-8"))
-        if self.name_dictionary_path and self.name_dictionary_path.exists():
-            names = pd.read_csv(self.name_dictionary_path, encoding="utf-8-sig")
-            name_column = "nome_chave" if "nome_chave" in names else "nome_local"
-            self.edl_name_keys.update(self._norm(value) for value in names[name_column].dropna())
         self._boundary = None
         self._boundary_metric = None
         if self.boundary_path and self.boundary_path.exists():
@@ -63,6 +55,15 @@ class Transform:
         if pd.isna(value) or str(value).strip() == "":
             return None
         return str(value).strip()
+
+    @staticmethod
+    def _usable_name(value: object) -> str | None:
+        text = Transform._text(value)
+        if text is None:
+            return None
+        if Transform._norm(text) in {"NAOTEM", "SEMNOME", "NAOIDENTIFICADO", "NAOINFORMADO", "NA", "N/A"}:
+            return None
+        return text
 
     @staticmethod
     def _number(value: object) -> float | None:
@@ -252,6 +253,15 @@ class Transform:
             result = -abs(result)
         return result
 
+    def _coordinate_pair(self, value: object) -> tuple[object, object] | None:
+        text = self._text(value)
+        if not text or "," not in text and ";" not in text:
+            return None
+        parts = [part.strip() for part in re.split(r"[,;]", text)]
+        if len(parts) != 2 or self._coordinate(parts[0]) is None or self._coordinate(parts[1]) is None:
+            return None
+        return parts[0], parts[1]
+
     @staticmethod
     def _fragmented_decimal(value: object) -> bool:
         text = str(value or "")
@@ -399,6 +409,7 @@ class Transform:
                     "query": query,
                     "provedor": "Nominatim/OpenStreetMap",
                     "estrategia_geocodificacao": "nome_local" if query in name_queries else "endereco",
+                    "qualidade_geocodificacao": "revisao" if query in name_queries and item.get("category") == "highway" else "alta",
                 }
                 break
             if result is not None:
@@ -432,13 +443,14 @@ class Transform:
             return False
         if not name_query:
             return True
-        returned_name = self._norm(
+        source_tokens = self._name_tokens(name)
+        returned_tokens = self._name_tokens(
             address_data.get("amenity")
             or address_data.get("name")
             or item.get("name")
             or item.get("display_name")
         )
-        if not name or self._norm(name) not in returned_name:
+        if not source_tokens or not source_tokens.issubset(returned_tokens):
             return False
         returned_bairro = self._norm(
             address_data.get("suburb")
@@ -446,6 +458,16 @@ class Transform:
             or address_data.get("district")
         )
         return bool(bairro and returned_bairro and returned_bairro == self._norm(bairro))
+
+    @staticmethod
+    def _name_tokens(value: object) -> set[str]:
+        text = Transform._text(value)
+        if not text:
+            return set()
+        normalized = unicodedata.normalize("NFKD", text.upper())
+        normalized = "".join(char for char in normalized if not unicodedata.combining(char))
+        tokens = set(re.findall(r"[A-Z0-9]+", normalized))
+        return tokens - {"USF", "US", "PSF", "UPINHA", "UNIDADE", "DA", "DE", "DO", "DOS", "DAS", "FAMILIA"}
 
     def _geocode_queries(self, name: str | None, address: str | None, bairro: str | None) -> list[str]:
         parts = self._address_parts(address)
@@ -535,7 +557,7 @@ class Transform:
         queries: dict[str, tuple[str | None, str | None, str | None]] = {}
         for index in candidates:
             row = result.loc[index]
-            name, address, bairro = self._text(row.get("nome_local")), self._text(row.get("endereco")), self._text(row.get("bairro"))
+            name, address, bairro = self._usable_name(row.get("nome_local")), self._text(row.get("endereco")), self._text(row.get("bairro"))
             query = ", ".join(value for value in [name, address, bairro, "Recife", "Pernambuco", "Brasil"] if value)
             queries.setdefault(self._norm(query), (name, address, bairro))
         if not self.geocode_enabled:
@@ -561,7 +583,7 @@ class Transform:
         status_counts: Counter[str] = Counter()
         for index in candidates:
             row = result.loc[index]
-            name, address, bairro = self._text(row.get("nome_local")), self._text(row.get("endereco")), self._text(row.get("bairro"))
+            name, address, bairro = self._usable_name(row.get("nome_local")), self._text(row.get("endereco")), self._text(row.get("bairro"))
             query = ", ".join(value for value in [name, address, bairro, "Recife", "Pernambuco", "Brasil"] if value)
             outcome = geocoded[self._norm(query)]
             is_accepted = outcome.get("resultado") == "aceita"
@@ -587,8 +609,8 @@ class Transform:
                 "latitude_tratada": geo_lat if is_accepted else row.get("latitude"),
                 "longitude_tratada": geo_lon if is_accepted else row.get("longitude"),
                 "regra_coordenada": row.get("regra_coordenada"),
-                "regra_aplicada": "geocodificacao_endereco" if is_accepted else "geocodificacao_rejeitada",
-                "confianca": "alta" if is_accepted else "revisao",
+                "regra_aplicada": "geocodificacao_nome_local" if is_accepted and outcome.get("estrategia_geocodificacao") == "nome_local" else "geocodificacao_endereco" if is_accepted else "geocodificacao_rejeitada",
+                "confianca": outcome.get("qualidade_geocodificacao", "alta") if is_accepted else "revisao",
                 "classificacao_geografica": geo_status,
                 "distancia_limite_m": geo_distance,
                 "motivo_revisao": outcome.get("motivo"),
@@ -600,9 +622,10 @@ class Transform:
                 "endereco_consultado": outcome.get("query"),
                 "provedor_geocodificacao": outcome.get("provedor"),
                 "resultado_geocodificacao": outcome.get("resultado"),
+                "estrategia_geocodificacao": outcome.get("estrategia_geocodificacao"),
                 "latitude_geocodificada": geo_lat,
                 "longitude_geocodificada": geo_lon,
-                "qualidade_coordenada": "alta" if is_accepted else "revisao",
+                "qualidade_coordenada": outcome.get("qualidade_geocodificacao", "alta") if is_accepted else "revisao",
                 "fonte_coordenada": "geocodificacao_nominatim" if is_accepted else "planilha",
             }
             matching_audits = [
@@ -619,7 +642,7 @@ class Transform:
                 self.coordinate_audit.append(geocode_audit)
             status_counts[outcome.get("status_geocodificacao", "desconhecido")] += 1
             if is_accepted:
-                result.loc[index, ["latitude", "longitude", "latitude_geocodificada", "longitude_geocodificada", "classificacao_geografica", "distancia_limite_m", "fonte_coordenada", "qualidade_coordenada"]] = [geo_lat, geo_lon, geo_lat, geo_lon, geo_status, geo_distance, "geocodificacao_nominatim", "alta"]
+                result.loc[index, ["latitude", "longitude", "latitude_geocodificada", "longitude_geocodificada", "classificacao_geografica", "distancia_limite_m", "fonte_coordenada", "qualidade_coordenada"]] = [geo_lat, geo_lon, geo_lat, geo_lon, geo_status, geo_distance, "geocodificacao_nominatim", outcome.get("qualidade_geocodificacao", "alta")]
         logger.log(25, "geocodificação %s concluída | resultados: %s", label, {key: format_number(value) for key, value in status_counts.items()})
         logger.info(
             "geocodificação %s | cache: %s | novas requisições HTTP: %s",
@@ -660,6 +683,8 @@ class Transform:
             "distancia_limite_m": row.get("distancia_limite_m"),
             "status_geocodificacao": status,
             "resultado_geocodificacao": outcome.get("resultado"),
+            "qualidade_geocodificacao": outcome.get("qualidade_geocodificacao"),
+            "estrategia_geocodificacao": outcome.get("estrategia_geocodificacao"),
             "endereco_consultado": outcome.get("query"),
             "consultas_tentadas": outcome.get("consultas_geocodificacao"),
             "tentativas_geocodificacao": outcome.get("tentativas_geocodificacao"),
@@ -684,10 +709,13 @@ class Transform:
                 continue
             normalized = unicodedata.normalize("NFKD", text.upper())
             normalized = "".join(char for char in normalized if not unicodedata.combining(char))
-            match = re.search(r"RETIRAD[AO]\s*(?:EM|:)?\s*(JANEIRO|FEVEREIRO|MARCO|ABRIL|MAIO|JUNHO|JULHO|AGOSTO|SETEMBRO|OUTUBRO|NOVEMBRO|DEZEMBRO)\s*(?:DE\s*)?(20\d{2})", normalized)
+            match = re.search(r"RETIRAD[AO]S?\s*(?:EM|:)?\s*(JANEIRO|FEVEREIRO|MARCO|ABRIL|MAIO|JUNHO|JULHO|AGOSTO|SETEMBRO|OUTUBRO|NOVEMBRO|DEZEMBRO)\s*(?:DE\s*)?(20\d{2})", normalized)
             if match:
                 return "retirado", f"{match.group(2)}-{months[match.group(1)]}", text
-            match = re.search(r"RETIRAD[AO].*?(0?[1-9]|1[0-2])\s*/\s*(20\d{2})", normalized)
+            match = re.search(r"RETIRAD[AO]S?.*?(20\d{2})[-/]?(0?[1-9]|1[0-2])", normalized)
+            if match:
+                return "retirado", f"{match.group(1)}-{int(match.group(2)):02d}", text
+            match = re.search(r"RETIRAD[AO]S?.*?(0?[1-9]|1[0-2])\s*/\s*(20\d{2})", normalized)
             if match:
                 return "retirado", f"{match.group(2)}-{int(match.group(1)):02d}", text
         return "ativo", None, None
@@ -736,7 +764,7 @@ class Transform:
                     "dados_originais": json.dumps(self._source(row), ensure_ascii=False, default=str),
                 })
                 continue
-            if responsible == "RETIRADO" and not has_location:
+            if responsible in {"RETIRADO", "RETIRADOS", "RETIRADA", "RETIRADAS"} and not has_location:
                 self.record_audit.append({
                     "tipo_registro": "edl",
                     "regra_aplicada": "marcador_retirado_ignorado",
@@ -754,7 +782,10 @@ class Transform:
             lat_value = row.get(coordinate_column) if coordinate_column else None
             lon_column = next((c for c in frame.columns if self._norm(c) == "LONGITUDE"), None)
             lon_value = row.get(lon_column) if lon_column else None
-            if lon_value is None and coordinate_index >= 0 and coordinate_index + 1 < len(frame.columns):
+            coordinate_pair = self._coordinate_pair(lat_value) if self._text(lon_value) is None else None
+            if coordinate_pair:
+                lat_value, lon_value = coordinate_pair
+            elif self._text(lon_value) is None and coordinate_index >= 0 and coordinate_index + 1 < len(frame.columns):
                 lon_value = row.get(frame.columns[coordinate_index + 1])
             row = row.copy()
             row["_tipo_registro"] = "edl"
@@ -771,6 +802,23 @@ class Transform:
             row["_valor_original_coordenadas"] = ", ".join(filter(None, [self._text(lat_value), self._text(lon_value)])) or None
             audit_start = len(self.coordinate_audit)
             lat, lon, coordinate_rule = self._coordinates(lat_value, lon_value, row)
+            if coordinate_pair:
+                coordinate_rule = "par_coordenadas_mesma_celula" if coordinate_rule == "sem_alteracao" else f"par_coordenadas_mesma_celula_e_{coordinate_rule}"
+                if len(self.coordinate_audit) == audit_start:
+                    pair_audit = {
+                        "latitude_original": self._text(lat_value),
+                        "longitude_original": self._text(lon_value),
+                        "latitude_tratada": lat,
+                        "longitude_tratada": lon,
+                        "regra_aplicada": coordinate_rule,
+                        "confianca": "alta" if lat is not None and lon is not None else "revisao",
+                        "arquivo_origem": row.get("_arquivo_origem"),
+                        "aba_origem": row.get("_aba_origem"),
+                        "linha_origem": row.get("_linha_origem"),
+                        "motivo_revisao": "latitude e longitude estavam na mesma célula da fonte",
+                    }
+                    pair_audit.update(self._coordinate_context(row))
+                    self.coordinate_audit.append(pair_audit)
             status, distance = self._geography(lat, lon)
             coordinate_source, coordinate_quality = "planilha", "alta" if status == "dentro_recife" else "revisao"
             for audit in self.coordinate_audit[audit_start:]:
@@ -810,11 +858,6 @@ class Transform:
             })
             self._audit_geography_review(records[-1], status, distance)
         result = pd.DataFrame(records)
-        for value in result.get("nome_local", pd.Series(dtype=object)).dropna():
-            key = self._norm(value)
-            if key:
-                self.edl_name_keys.add(key)
-                self.edl_name_counts[str(value).strip()] += 1
         log_stage(logger, 2, "transformação EDL", completed=True)
         log_stage(logger, 3, "geocodificação EDL")
         result = self._geocode_records(result, "EDL")
@@ -1110,20 +1153,15 @@ class Transform:
             "logradouro", "numero", "complemento", "endereco_sem_complemento", "bairro",
             "latitude_original", "longitude_original", "latitude_tratada", "longitude_tratada",
             "classificacao_geografica", "distancia_limite_m", "status_geocodificacao",
-            "resultado_geocodificacao", "endereco_consultado", "consultas_tentadas",
+            "resultado_geocodificacao", "qualidade_geocodificacao", "endereco_consultado", "consultas_tentadas",
             "tentativas_geocodificacao", "motivo_revisao", "provedor_geocodificacao",
+            "estrategia_geocodificacao",
         ]
         frame = pd.DataFrame(self.geocode_inventory)
         for column in columns:
             if column not in frame:
                 frame[column] = None
         return frame[columns]
-
-    def edl_name_dictionary_frame(self) -> pd.DataFrame:
-        return pd.DataFrame([
-            {"nome_local": name, "nome_chave": self._norm(name), "ocorrencias": count}
-            for name, count in sorted(self.edl_name_counts.items())
-        ])
 
     def audits(self) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         provenance_columns = [
@@ -1149,6 +1187,7 @@ class Transform:
             "latitude_original", "longitude_original", "latitude_tratada", "longitude_tratada",
             "regra_coordenada", "regra_original", "regra_aplicada", "confianca", "classificacao_geografica", "distancia_limite_m",
             "motivo_revisao", "endereco_consultado", "provedor_geocodificacao", "resultado_geocodificacao",
+            "estrategia_geocodificacao",
             "latitude_geocodificada", "longitude_geocodificada", "qualidade_coordenada", "fonte_coordenada",
             "decisao_geocodificacao", "status_geocodificacao", "tentativas_geocodificacao",
             "consultas_geocodificacao", "dados_originais",

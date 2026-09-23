@@ -75,12 +75,11 @@ def main(geocode: bool = True) -> None:
         logger.log(SUCCESS, "TRANSFORMAÇÃO concluída | locais EDL: %s | ovitrampas: %s | observações: %s | ciclos: %s", format_number(len(edls)), format_number(len(locations)), format_number(len(observations)), format_number(len(cycles)))
         coordinate_audit, date_audit, record_audit, id_audit = transformer.audits()
         geocode_inventory = transformer.geocode_inventory_frame()
-        edl_name_dictionary = transformer.edl_name_dictionary_frame()
         logger.info("AUDITORIAS preparadas | coordenadas: %s | datas: %s | registros: %s | IDs: %s", format_number(len(coordinate_audit)), format_number(len(date_audit)), format_number(len(record_audit)), format_number(len(id_audit)))
 
         log_stage(logger, 8, "carga")
         logger.info("CARGA iniciada | banco: %s", loader.database_path)
-        loader.load_sqlite(edls, locations, observations, cycles, coordinate_audit, date_audit, record_audit, id_audit, geocode_inventory, edl_name_dictionary)
+        loader.load_sqlite(edls, locations, observations, cycles, coordinate_audit, date_audit, record_audit, id_audit, geocode_inventory)
         logger.log(SUCCESS, "CARGA concluída | banco e auditorias atualizados")
         log_stage(logger, 8, "carga", completed=True)
     except Exception:
