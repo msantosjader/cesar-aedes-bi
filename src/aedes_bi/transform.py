@@ -525,7 +525,7 @@ class Transform:
             "decisao_geocodificacao": decision,
         })
 
-    def _geocode_records(self, result: pd.DataFrame) -> pd.DataFrame:
+    def _geocode_records(self, result: pd.DataFrame, label: str) -> pd.DataFrame:
         if result.empty:
             return result
         candidates = result.index[
@@ -543,9 +543,11 @@ class Transform:
                 row = result.loc[index]
                 parts = self._address_parts(self._text(row.get("endereco")))
                 self.geocode_inventory.append(self._geocode_inventory_row(row, parts, None, "nao_executada"))
-            logger.info("geocodificação não executada | candidatos pendentes: %s | use sem --sem-geocodificar para consultar endereços", format_number(len(candidates)))
+            logger.info("geocodificação %s não executada | candidatos pendentes: %s | use sem --geocodificar para consultar endereços", label, format_number(len(candidates)))
             return result
-        logger.info("geocodificação iniciada | candidatos: %s | endereços únicos: %s", format_number(len(candidates)), format_number(len(queries)))
+        cache_hits_start = self.geocode_cache_hits
+        http_requests_start = self.geocode_http_requests
+        logger.info("geocodificação %s iniciada | candidatos: %s | endereços únicos: %s", label, format_number(len(candidates)), format_number(len(queries)))
         geocoded: dict[str, dict[str, Any]] = {}
         total = len(queries)
         for processed, (key, values) in enumerate(queries.items(), start=1):
@@ -554,7 +556,7 @@ class Transform:
                 continue
             percentage = processed / total * 100 if total else 100
             filled = round(30 * processed / total) if total else 30
-            logger.info("geocodificação | [%s%s] %s/%s | %.1f%%", "#" * filled, "-" * (30 - filled), format_number(processed), format_number(total), percentage)
+            logger.info("geocodificação %s | [%s%s] %s/%s | %.1f%%", label, "#" * filled, "-" * (30 - filled), format_number(processed), format_number(total), percentage)
 
         status_counts: Counter[str] = Counter()
         for index in candidates:
@@ -618,8 +620,13 @@ class Transform:
             status_counts[outcome.get("status_geocodificacao", "desconhecido")] += 1
             if is_accepted:
                 result.loc[index, ["latitude", "longitude", "latitude_geocodificada", "longitude_geocodificada", "classificacao_geografica", "distancia_limite_m", "fonte_coordenada", "qualidade_coordenada"]] = [geo_lat, geo_lon, geo_lat, geo_lon, geo_status, geo_distance, "geocodificacao_nominatim", "alta"]
-        logger.log(25, "geocodificação concluída | resultados: %s", {key: format_number(value) for key, value in status_counts.items()})
-        logger.info("geocodificação | cache: %s | novas requisições HTTP: %s", format_number(self.geocode_cache_hits), format_number(self.geocode_http_requests))
+        logger.log(25, "geocodificação %s concluída | resultados: %s", label, {key: format_number(value) for key, value in status_counts.items()})
+        logger.info(
+            "geocodificação %s | cache: %s | novas requisições HTTP: %s",
+            label,
+            format_number(self.geocode_cache_hits - cache_hits_start),
+            format_number(self.geocode_http_requests - http_requests_start),
+        )
         return result
 
     @staticmethod
@@ -807,7 +814,7 @@ class Transform:
             if key:
                 self.edl_name_keys.add(key)
                 self.edl_name_counts[str(value).strip()] += 1
-        result = self._geocode_records(result)
+        result = self._geocode_records(result, "EDL")
         logger.info("linhas estruturais excluídas: %s", format_number(len(self.record_audit) - record_audit_start))
         logger.info("coordenadas EDL auditadas: %s", format_number(len(self.coordinate_audit) - coordinate_audit_start))
         logger.log(25, "transformação EDL concluída | locais: %s", format_number(len(result)))
@@ -905,7 +912,7 @@ class Transform:
                     audit["houve_colisao"] = True
                     audit["motivo_revisao"] = "IDs diferentes geraram a mesma chave"
         collision_count = sum(1 for item in self.id_audit[id_audit_start:] if item["houve_colisao"])
-        result = self._geocode_records(result)
+        result = self._geocode_records(result, "OVT")
         logger.info("IDs normalizados: %s | colisões: %s", format_number(len(self.id_audit) - id_audit_start), format_number(collision_count))
         logger.info("coordenadas de localizações auditadas: %s", format_number(len(self.coordinate_audit) - coordinate_audit_start))
         logger.log(25, "transformação de localizações concluída | registros: %s", format_number(len(result)))
