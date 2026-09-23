@@ -8,7 +8,7 @@ from time import monotonic
 
 from aedes_bi.extract import Extract
 from aedes_bi.load import Load
-from aedes_bi.logging_utils import format_number
+from aedes_bi.logging_utils import format_number, log_stage
 from aedes_bi.transform import Transform
 
 
@@ -53,6 +53,7 @@ def main(geocode: bool = True) -> None:
     logger = configure_logging()
     extractor = Extract()
     try:
+        log_stage(logger, 1, "extração")
         logger.info("EXTRAÇÃO iniciada")
         boundary = extractor.download_recife_boundary()
         transformer = Transform(boundary, geocode=geocode)
@@ -64,6 +65,7 @@ def main(geocode: bool = True) -> None:
         raw_locations = extractor.read_ovt_locations()
         raw_observations = extractor.read_ovt_observations()
         logger.log(SUCCESS, "EXTRAÇÃO concluída | EDLs: %s | localizações: %s | observações brutas: %s", format_number(len(raw_edls)), format_number(len(raw_locations)), format_number(len(raw_observations)))
+        log_stage(logger, 1, "extração", completed=True)
 
         logger.info("TRANSFORMAÇÃO iniciada")
         edls = transformer.transform_edls(raw_edls)
@@ -76,9 +78,11 @@ def main(geocode: bool = True) -> None:
         edl_name_dictionary = transformer.edl_name_dictionary_frame()
         logger.info("AUDITORIAS preparadas | coordenadas: %s | datas: %s | registros: %s | IDs: %s", format_number(len(coordinate_audit)), format_number(len(date_audit)), format_number(len(record_audit)), format_number(len(id_audit)))
 
+        log_stage(logger, 8, "carga")
         logger.info("CARGA iniciada | banco: %s", loader.database_path)
         loader.load_sqlite(edls, locations, observations, cycles, coordinate_audit, date_audit, record_audit, id_audit, geocode_inventory, edl_name_dictionary)
         logger.log(SUCCESS, "CARGA concluída | banco e auditorias atualizados")
+        log_stage(logger, 8, "carga", completed=True)
     except Exception:
         logger.exception("PIPELINE interrompido por erro")
         raise

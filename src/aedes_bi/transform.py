@@ -15,7 +15,7 @@ import pandas as pd
 import requests
 from shapely.geometry import Point
 
-from .logging_utils import format_number
+from .logging_utils import format_number, log_stage
 
 logger = logging.getLogger("aedes_bi.transform")
 
@@ -697,6 +697,7 @@ class Transform:
         return any(Transform._text(row.get(column)) for column in ("NOME FANTASIA/COMERCIAL", "LOGRADOURO", "BAIRRO"))
 
     def transform_edls(self, frame: pd.DataFrame) -> pd.DataFrame:
+        log_stage(logger, 2, "transformação EDL")
         logger.info("transformação EDL iniciada | registros brutos: %s", format_number(len(frame)))
         record_audit_start = len(self.record_audit)
         coordinate_audit_start = len(self.coordinate_audit)
@@ -814,13 +815,17 @@ class Transform:
             if key:
                 self.edl_name_keys.add(key)
                 self.edl_name_counts[str(value).strip()] += 1
+        log_stage(logger, 2, "transformação EDL", completed=True)
+        log_stage(logger, 3, "geocodificação EDL")
         result = self._geocode_records(result, "EDL")
+        log_stage(logger, 3, "geocodificação EDL", completed=True)
         logger.info("linhas estruturais excluídas: %s", format_number(len(self.record_audit) - record_audit_start))
         logger.info("coordenadas EDL auditadas: %s", format_number(len(self.coordinate_audit) - coordinate_audit_start))
         logger.log(25, "transformação EDL concluída | locais: %s", format_number(len(result)))
         return result
 
     def transform_locations(self, frame: pd.DataFrame) -> pd.DataFrame:
+        log_stage(logger, 4, "transformação OVT")
         logger.info("transformação de localizações iniciada | registros: %s", format_number(len(frame)))
         id_audit_start = len(self.id_audit)
         coordinate_audit_start = len(self.coordinate_audit)
@@ -912,7 +917,10 @@ class Transform:
                     audit["houve_colisao"] = True
                     audit["motivo_revisao"] = "IDs diferentes geraram a mesma chave"
         collision_count = sum(1 for item in self.id_audit[id_audit_start:] if item["houve_colisao"])
+        log_stage(logger, 4, "transformação OVT", completed=True)
+        log_stage(logger, 5, "geocodificação OVT")
         result = self._geocode_records(result, "OVT")
+        log_stage(logger, 5, "geocodificação OVT", completed=True)
         logger.info("IDs normalizados: %s | colisões: %s", format_number(len(self.id_audit) - id_audit_start), format_number(collision_count))
         logger.info("coordenadas de localizações auditadas: %s", format_number(len(self.coordinate_audit) - coordinate_audit_start))
         logger.log(25, "transformação de localizações concluída | registros: %s", format_number(len(result)))
@@ -953,6 +961,7 @@ class Transform:
         ]
         reference_dates: dict[tuple[object, object, int | None, int | None, str], list[pd.Timestamp]] = {}
         anchors: dict[object, list[pd.Timestamp]] = {}
+        log_stage(logger, 6, "referências temporais")
         logger.info("preparação das referências temporais iniciada")
         for processed, (_, row) in enumerate(frame.iterrows(), start=1):
             year_value = self._number(row.get(year_column)) if year_column else self._number(row.get("Ano"))
@@ -970,6 +979,8 @@ class Transform:
             log_progress("referências temporais", processed)
         anchor_dates = {source: pd.Series(values).sort_values().iloc[len(values) // 2] for source, values in anchors.items()}
         logger.info("preparação das referências temporais concluída")
+        log_stage(logger, 6, "referências temporais", completed=True)
+        log_stage(logger, 7, "observações")
         logger.info("processamento das observações iniciado")
         for processed, (_, row) in enumerate(frame.iterrows(), start=1):
             year = self._number(row.get(year_column)) if year_column else None
@@ -1042,6 +1053,7 @@ class Transform:
         logger.info("datas ajustadas/inferidas: %s", format_number(len(corrections)))
         logger.info("status normalizados: %s", {key: format_number(value) for key, value in status_counts.items()})
         logger.log(25, "transformação de observações concluída | registros: %s", format_number(len(result)))
+        log_stage(logger, 7, "observações", completed=True)
         return result, pd.DataFrame(cycles.values())
 
     def reconcile_ovt_ids(self, locations: pd.DataFrame, observations: pd.DataFrame) -> None:
