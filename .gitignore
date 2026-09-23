@@ -1,0 +1,21 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Pipeline outputs
+opencode.json
+database/*.sqlite
+data/auditoria/*.csv
+data/referencia/*.geojson
+data/processados/*
+
+# UV lock is intentionally tracked; generated caches are not.
+.ruff_cache/
+.pytest_cache/

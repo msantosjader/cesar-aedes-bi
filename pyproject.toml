@@ -1,0 +1,19 @@
+[project]
+name = "aedes-bi"
+version = "0.1.0"
+description = "Pipeline de dados de EDLs e ovitrampas do Recife"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "geopandas>=1.0",
+    "openpyxl>=3.1",
+    "pandas>=2.2",
+    "pyproj>=3.6",
+    "requests>=2.32",
+    "shapely>=2.0",
+    "xlrd>=2.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
