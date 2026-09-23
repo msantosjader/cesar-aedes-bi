@@ -27,6 +27,31 @@ Todos os logs informam a etapa corrente como `X/Y`. As fases são `EXTRACT`,
 `TRANSFORM`, `LOAD` e `PIPELINE`. As contagens usam separador de milhar no
 padrão brasileiro.
 
+### Etapas do pipeline
+
+O marcador `X/Y` identifica a etapa operacional corrente:
+
+1. **`1/8` Extração:** lê as planilhas de EDLs, localizações e observações,
+   identifica abas e cabeçalhos, preserva arquivo, aba e linha de origem e
+   obtém o limite municipal do Recife quando necessário.
+2. **`2/8` Transformação de EDLs:** padroniza textos, números, endereços,
+   situações de retirada e coordenadas dos EDLs, mantendo os valores originais
+   e registrando decisões de qualidade.
+3. **`3/8` Geocodificação de EDLs:** consulta endereço e, como fallback, nome
+   do local para candidatos sem coordenada válida ou fora do Recife, mantendo
+   as consultas, resultados e revisões no inventário.
+4. **`4/8` Transformação de ovitrampas:** normaliza o cadastro de localizações,
+   IDs, endereços e coordenadas, preservando o ID original e auditando colisões.
+5. **`5/8` Geocodificação de ovitrampas:** geocodifica localizações candidatas
+   com o mesmo fluxo de endereço e nome, sem apagar coordenadas tratadas com
+   regras seguras.
+6. **`6/8` Referências temporais:** identifica anos, ciclos e referências de
+   datas que serão usadas para interpretar as observações.
+7. **`7/8` Observações:** transforma coletas, quantidade de ovos, palhetas,
+   status e datas das observações, gera os ciclos e registra correções de data.
+8. **`8/8` Carga:** recria o banco SQLite, grava as tabelas tratadas, índices,
+   auditorias, inventário de geocodificação e cache.
+
 Saídas:
 
 - `database/aedes_bi.sqlite`;
