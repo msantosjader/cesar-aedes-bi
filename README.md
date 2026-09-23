@@ -47,6 +47,17 @@ fontes, em vez de receber `UPDATE` ou `UPSERT` incremental. Assim, a execução
 é idempotente e não duplica registros, além de remover do banco registros que
 deixaram de existir nas fontes.
 
+### Limitações da carga atual
+
+Como as tabelas são reconstruídas a cada execução:
+
+- alterações manuais feitas diretamente no SQLite serão perdidas;
+- os IDs técnicos `AUTOINCREMENT` podem mudar entre execuções;
+- consultas e integrações devem usar chaves de negócio, como `id_edl` e
+  `id_ovt_chave`;
+- o cache de geocodificação é preservado e reutilizado entre execuções;
+- ainda não há histórico automático das versões dos registros.
+
 Os logs são exibidos no console e salvos em `logs/pipeline.log` no formato:
 
 ```text
@@ -302,6 +313,7 @@ externas.
 ### Próximos passos do pipeline
 
 - Definir chaves de negócio completas para todas as tabelas.
+- Definir identificadores estáveis para evitar dependência de IDs técnicos.
 - Avaliar carga incremental com `UPDATE`/`UPSERT`, evitando reconstruir todo o
   banco quando apenas parte das fontes for alterada.
 - Avaliar histórico de versões dos registros, caso seja necessário preservar
