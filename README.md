@@ -20,11 +20,12 @@ as auditorias sem alterar os arquivos em `data/entradas/`.
 Os logs são exibidos no console no formato:
 
 ```text
-DD/MM/AAAA HH:MM:SS | HH:MM:SS | FASE      | TIPO    | mensagem
+DD/MM/AAAA HH:MM:SS | HH:MM:SS | X/Y | FASE      | TIPO    | mensagem
 ```
 
-As fases são `EXTRACT`, `TRANSFORM`, `LOAD` e `PIPELINE`. As contagens usam
-separador de milhar no padrão brasileiro.
+Todos os logs informam a etapa corrente como `X/Y`. As fases são `EXTRACT`,
+`TRANSFORM`, `LOAD` e `PIPELINE`. As contagens usam separador de milhar no
+padrão brasileiro.
 
 Saídas:
 

@@ -1,7 +1,9 @@
 import logging
+from contextvars import ContextVar
 
 
 PIPELINE_STAGES = 8
+_current_stage = ContextVar("pipeline_stage", default=f"0/{PIPELINE_STAGES}")
 
 
 def format_number(value: int | float) -> str:
@@ -10,17 +12,11 @@ def format_number(value: int | float) -> str:
 
 
 def log_stage(logger: logging.Logger, number: int, name: str, completed: bool = False) -> None:
-    """Registra o avanço geral sem substituir o progresso interno das etapas."""
-    completed_stages = number if completed else number - 1
-    percentage = completed_stages / PIPELINE_STAGES * 100
-    remaining = PIPELINE_STAGES - completed_stages
+    """Atualiza a etapa corrente e registra sua transição."""
+    _current_stage.set(f"{number}/{PIPELINE_STAGES}")
     state = "concluída" if completed else "iniciada"
-    logger.info(
-        "ETAPA %d/%d | %.1f%% geral | %s %s | faltam %d etapas",
-        number,
-        PIPELINE_STAGES,
-        percentage,
-        name,
-        state,
-        remaining,
-    )
+    logger.info("%s %s", name, state)
+
+
+def current_stage() -> str:
+    return _current_stage.get()

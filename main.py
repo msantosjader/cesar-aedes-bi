@@ -8,7 +8,7 @@ from time import monotonic
 
 from aedes_bi.extract import Extract
 from aedes_bi.load import Load
-from aedes_bi.logging_utils import format_number, log_stage
+from aedes_bi.logging_utils import current_stage, format_number, log_stage
 from aedes_bi.transform import Transform
 
 
@@ -35,7 +35,7 @@ class PipelineFormatter(logging.Formatter):
             logging.CRITICAL: "FATAL",
             SUCCESS: "SUCESSO",
         }.get(record.levelno, "INFO")
-        return f"{timestamp} | {elapsed // 3600:02d}:{elapsed % 3600 // 60:02d}:{elapsed % 60:02d} | {phase:<9} | {level:<7} | {record.getMessage()}"
+        return f"{timestamp} | {elapsed // 3600:02d}:{elapsed % 3600 // 60:02d}:{elapsed % 60:02d} | {current_stage()} | {phase:<9} | {level:<7} | {record.getMessage()}"
 
 
 def configure_logging() -> logging.Logger:
