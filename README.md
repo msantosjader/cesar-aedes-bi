@@ -41,7 +41,11 @@ uv run python main.py --sem-geocodificar
 ```
 
 O comando pode ser executado novamente. Ele recria o banco SQLite e substitui
-as auditorias sem alterar os arquivos em `data/entradas/`.
+as auditorias sem alterar os arquivos em `data/entradas/`. Essa é a estratégia
+de carga atual: as tabelas são reconstruídas com o estado mais recente das
+fontes, em vez de receber `UPDATE` ou `UPSERT` incremental. Assim, a execução
+é idempotente e não duplica registros, além de remover do banco registros que
+deixaram de existir nas fontes.
 
 Os logs são exibidos no console e salvos em `logs/pipeline.log` no formato:
 
@@ -294,6 +298,14 @@ externas.
 - Registrar fonte, data de atualização e responsável por cada camada.
 - Avaliar uma coluna `id_ovitrampa` opcional com chave estrangeira para o
   cadastro atual, mantendo `id_ovt_chave` para registros históricos.
+
+### Próximos passos do pipeline
+
+- Definir chaves de negócio completas para todas as tabelas.
+- Avaliar carga incremental com `UPDATE`/`UPSERT`, evitando reconstruir todo o
+  banco quando apenas parte das fontes for alterada.
+- Avaliar histórico de versões dos registros, caso seja necessário preservar
+  alterações entre execuções.
 
 O resultado da comparação Excel/GIS deve classificar cada registro como:
 
