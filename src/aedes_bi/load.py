@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 import sqlite3
+import logging
 from pathlib import Path
 
 import pandas as pd
+
+from .logging_utils import format_number
+
+logger = logging.getLogger("aedes_bi.load")
 
 
 class Load:
@@ -22,6 +27,10 @@ class Load:
         cycles: pd.DataFrame,
         coordinate_audit: pd.DataFrame | None = None,
         date_audit: pd.DataFrame | None = None,
+        record_audit: pd.DataFrame | None = None,
+        id_audit: pd.DataFrame | None = None,
+        geocode_inventory: pd.DataFrame | None = None,
+        edl_name_dictionary: pd.DataFrame | None = None,
     ) -> None:
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
         self.audit_dir.mkdir(parents=True, exist_ok=True)
@@ -48,12 +57,30 @@ class Load:
             connection.execute("CREATE INDEX IF NOT EXISTS idx_ovt_chave ON ovitrampas (id_ovt_chave)")
             connection.execute("CREATE INDEX IF NOT EXISTS idx_obs_ovt_ciclo ON observacoes_ovitrampas (id_ovt_chave, ano, ciclo)")
             connection.execute("CREATE INDEX IF NOT EXISTS idx_edls_distrito ON edls (distrito)")
+            logger.info("tabelas SQLite carregadas | edls: %s | ovitrampas: %s | ciclos: %s | observações: %s", format_number(len(edls)), format_number(len(locations)), format_number(len(cycles)), format_number(len(observations)))
         (coordinate_audit if coordinate_audit is not None else pd.DataFrame()).to_csv(
             self.audit_dir / "auditoria_coordenadas.csv", index=False, encoding="utf-8-sig"
         )
         (date_audit if date_audit is not None else pd.DataFrame()).to_csv(
             self.audit_dir / "auditoria_datas.csv", index=False, encoding="utf-8-sig"
         )
+        (record_audit if record_audit is not None else pd.DataFrame()).to_csv(
+            self.audit_dir / "auditoria_registros.csv", index=False, encoding="utf-8-sig"
+        )
+        (id_audit if id_audit is not None else pd.DataFrame()).to_csv(
+            self.audit_dir / "auditoria_ids.csv", index=False, encoding="utf-8-sig"
+        )
+        (geocode_inventory if geocode_inventory is not None else pd.DataFrame()).to_csv(
+            self.root / "data" / "processados" / "inventario_geocodificacao.csv",
+            index=False,
+            encoding="utf-8-sig",
+        )
+        (edl_name_dictionary if edl_name_dictionary is not None else pd.DataFrame()).to_csv(
+            self.root / "data" / "processados" / "nomes_locais_edl.csv",
+            index=False,
+            encoding="utf-8-sig",
+        )
+        logger.info("auditorias gravadas | diretório: %s", self.audit_dir)
 
     @staticmethod
     def _replace_table(connection: sqlite3.Connection, name: str, frame: pd.DataFrame, constraints: str) -> None:

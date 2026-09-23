@@ -15,6 +15,7 @@ database/*.sqlite
 data/auditoria/*.csv
 data/referencia/*.geojson
 data/processados/*
+.~lock.*
 
 # UV lock is intentionally tracked; generated caches are not.
 .ruff_cache/

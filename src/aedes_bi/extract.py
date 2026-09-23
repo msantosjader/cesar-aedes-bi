@@ -2,10 +2,15 @@ from __future__ import annotations
 
 from pathlib import Path
 import re
+import logging
 from typing import Iterable
 
 import pandas as pd
 import requests
+
+from .logging_utils import format_number
+
+logger = logging.getLogger("aedes_bi.extract")
 
 
 class Extract:
@@ -28,6 +33,7 @@ class Extract:
                 header_index = index
                 break
         if header_index is None:
+            logger.warning("cabeçalho não localizado | arquivo: %s | aba: %s", path.name, sheet)
             return None
         frame = raw.iloc[header_index + 1 :].copy()
         frame.columns = self._unique_columns(raw.iloc[header_index].tolist())
@@ -35,7 +41,10 @@ class Extract:
         frame["_arquivo_origem"] = str(path.relative_to(self.root))
         frame["_aba_origem"] = sheet
         frame["_linha_origem"] = frame.index.astype(int) + 1
-        return frame.reset_index(drop=True)
+        frame = frame.reset_index(drop=True)
+        logger.debug("cabeçalho localizado | arquivo: %s | aba: %s | linha: %d", path.name, sheet, header_index + 1)
+        logger.info("arquivo lido | arquivo: %s | aba: %s | registros: %s", path.name, sheet, format_number(len(frame)))
+        return frame
 
     @staticmethod
     def _clean(value: object) -> str:
@@ -54,18 +63,32 @@ class Extract:
 
     def _read_matching(self, paths: Iterable[Path], marker: Iterable[str]) -> pd.DataFrame:
         frames: list[pd.DataFrame] = []
-        for path in sorted(paths):
+        path_list = list(paths)
+        for path in sorted(path_list):
             engine = "xlrd" if path.suffix.lower() == ".xls" else "openpyxl"
             book = pd.ExcelFile(path, engine=engine)
             for sheet in book.sheet_names:
                 frame = self._read_sheet(path, sheet, marker)
                 if frame is not None:
                     frames.append(frame)
-        return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+        result = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+        logger.info("extração consolidada | arquivos: %s | registros: %s", format_number(len(path_list)), format_number(len(result)))
+        return result
 
     def read_edls(self) -> pd.DataFrame:
         path = self.input_dir / "TOTAL DE EDL POR DS.xlsx"
-        return self._read_matching([path], ["Nº", "RESP. PELO PE"])
+        book = pd.ExcelFile(path, engine="openpyxl")
+        frames: list[pd.DataFrame] = []
+        for sheet in book.sheet_names:
+            if not self._clean(sheet).startswith("DS"):
+                logger.info("aba auxiliar ignorada | arquivo: %s | aba: %s", path.name, sheet)
+                continue
+            frame = self._read_sheet(path, sheet, ["Nº", "RESP. PELO PE"])
+            if frame is not None:
+                frames.append(frame)
+        result = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+        logger.info("extração EDL consolidada | abas: %s | registros: %s", format_number(len(frames)), format_number(len(result)))
+        return result
 
     def read_ovt_locations(self) -> pd.DataFrame:
         path = self.input_dir / "Georreferenciamento OVT 2026 ATUALIZAÇÃO.xlsx"
@@ -79,10 +102,18 @@ class Extract:
             directory = self.input_dir / f"OVITRAMPAS {current_year}"
             for path in sorted(directory.glob("*.xls")):
                 frames.extend(self._read_legacy_observations(path, current_year))
-            paths.extend(directory.glob("*.xlsx"))
-        modern = self._read_matching(paths, ["ID", "CICLO"])
-        if not modern.empty:
-            frames.append(modern)
+            for path in sorted(directory.glob("*.xlsx")):
+                if "CONSOLIDADOS" in path.name.upper():
+                    logger.info("arquivo auxiliar ignorado | arquivo: %s", path.name)
+                    continue
+                book = pd.ExcelFile(path, engine="openpyxl")
+                for sheet in book.sheet_names:
+                    if current_year == 2026 and sheet != "CICLO 1":
+                        logger.info("aba auxiliar ignorada | arquivo: %s | aba: %s", path.name, sheet)
+                        continue
+                    frame = self._read_sheet(path, sheet, ["ID", "CICLO"])
+                    if frame is not None:
+                        frames.append(frame)
         return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
 
     def _read_legacy_observations(self, path: Path, year: int) -> list[pd.DataFrame]:
@@ -135,6 +166,7 @@ class Extract:
                         records.append(record)
             if records:
                 result.append(pd.DataFrame(records))
+                logger.info("arquivo lido | arquivo: %s | aba: %s | registros: %s", path.name, sheet, format_number(len(records)))
         return result
 
     @staticmethod
@@ -144,10 +176,12 @@ class Extract:
 
     def download_recife_boundary(self) -> Path:
         if self.boundary_path.exists():
+            logger.info("limite do Recife encontrado | arquivo: %s", self.boundary_path)
             return self.boundary_path
         self.reference_dir.mkdir(parents=True, exist_ok=True)
         url = "https://servicodados.ibge.gov.br/api/v3/malhas/municipios/2611606?formato=application/vnd.geo+json"
         response = requests.get(url, timeout=60)
         response.raise_for_status()
         self.boundary_path.write_bytes(response.content)
+        logger.info("limite do Recife baixado | arquivo: %s", self.boundary_path)
         return self.boundary_path
