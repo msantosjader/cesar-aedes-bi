@@ -260,6 +260,53 @@ fora do Recife a mais de 1 km do limite. Ela fica identificada separadamente da
 coordenada original. Use `--sem-geocodificar` para uma execução sem consultas
 externas.
 
+## Lacunas e próximos passos
+
+### Lacunas conhecidas
+
+- Ainda não há no projeto um cadastro georreferenciado histórico equivalente
+  para 2024 e 2025.
+- Ainda não foi confirmada uma camada GIS oficial de EDLs e ovitrampas com
+  fonte, responsável, data de atualização, sistema de coordenadas e precisão
+  documentados.
+- Não está confirmado se os IDs das ovitrampas permanecem estáveis entre anos,
+  ciclos, substituições e mudanças de localização.
+- Algumas coordenadas são ausentes, inválidas, ambíguas, duplicadas ou foram
+  obtidas por geocodificação externa, que não substitui uma fonte oficial.
+- Nem todos os registros possuem precisão, data de coleta da coordenada ou
+  histórico de alterações da geometria.
+
+### Próximos passos de dados
+
+- Procurar camadas GIS oficiais de EDLs e ovitrampas.
+- Comparar o GIS com as planilhas Excel por ID, endereço, bairro e coordenadas.
+- Identificar o que existe no GIS e falta no Excel, e o que existe no Excel e
+  falta no GIS.
+- Verificar se o GIS preenche lacunas do Excel ou repete os mesmos problemas:
+  coordenadas ausentes, inválidas, invertidas, duplicadas ou fora do Recife.
+- Comparar precisão, sistema de coordenadas, data de atualização e fonte das
+  geometrias.
+- Solicitar e incorporar, quando disponíveis, os cadastros georreferenciados
+  históricos de 2024 e 2025.
+- Comparar os IDs entre anos e documentar mudanças, substituições e retiradas.
+- Validar manualmente os pontos fora do Recife e os resultados nominais.
+- Criar uma camada histórica, caso existam arquivos GIS por ano.
+- Registrar fonte, data de atualização e responsável por cada camada.
+- Avaliar uma coluna `id_ovitrampa` opcional com chave estrangeira para o
+  cadastro atual, mantendo `id_ovt_chave` para registros históricos.
+
+O resultado da comparação Excel/GIS deve classificar cada registro como:
+
+```text
+presente_nos_dois
+somente_excel
+somente_gis
+divergente
+gis_preenche_lacuna
+gis_tem_mesmo_problema
+revisao_manual
+```
+
 ## CRISP-DM
 
 1. **Entendimento do negócio:** organizar dados de EDLs e ovitrampas para
