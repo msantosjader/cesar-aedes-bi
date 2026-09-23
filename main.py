@@ -4,6 +4,7 @@ from datetime import datetime
 import argparse
 import logging
 import sys
+from pathlib import Path
 from time import monotonic
 
 from aedes_bi.extract import Extract
@@ -42,10 +43,18 @@ def configure_logging() -> logging.Logger:
     logger = logging.getLogger("aedes_bi")
     logger.setLevel(logging.INFO)
     logger.propagate = False
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(PipelineFormatter())
+    log_dir = Path(__file__).resolve().parent / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    formatter = PipelineFormatter()
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(formatter)
+    file_handler = logging.FileHandler(log_dir / "pipeline.log", encoding="utf-8")
+    file_handler.setFormatter(formatter)
+    for handler in logger.handlers:
+        handler.close()
     logger.handlers.clear()
-    logger.addHandler(handler)
+    logger.addHandler(console_handler)
+    logger.addHandler(file_handler)
     return logger
 
 

@@ -5,6 +5,7 @@ import logging
 import re
 import time
 import unicodedata
+from collections import Counter
 from datetime import timedelta
 from pathlib import Path
 from typing import Any

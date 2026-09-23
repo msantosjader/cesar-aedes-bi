@@ -3,6 +3,32 @@
 Pipeline de Extração, Transformação e Carga para o primeiro módulo do projeto:
 EDLs, ovitrampas, ciclos e observações de ovitrampas do Recife.
 
+## Estrutura do projeto
+
+```text
+aedes-bi/
+├── data/
+│   ├── entradas/
+│   ├── referencia/
+│   ├── processados/
+│   └── auditoria/
+├── logs/
+│   ├── .gitkeep
+│   └── pipeline.log        # gerado durante a execução
+├── database/
+├── docs/
+│   └── erd.md
+├── src/aedes_bi/
+│   ├── extract.py
+│   ├── transform.py
+│   ├── load.py
+│   └── logging_utils.py
+├── main.py
+├── README.md
+├── pyproject.toml
+└── uv.lock
+```
+
 ## Execução
 
 Requisitos: Python 3.12+ e UV.
@@ -17,7 +43,7 @@ uv run python main.py --sem-geocodificar
 O comando pode ser executado novamente. Ele recria o banco SQLite e substitui
 as auditorias sem alterar os arquivos em `data/entradas/`.
 
-Os logs são exibidos no console no formato:
+Os logs são exibidos no console e salvos em `logs/pipeline.log` no formato:
 
 ```text
 DD/MM/AAAA HH:MM:SS | HH:MM:SS | X/Y | FASE      | TIPO    | mensagem
