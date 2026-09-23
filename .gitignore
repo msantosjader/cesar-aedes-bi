@@ -11,10 +11,12 @@ wheels/
 
 # Pipeline outputs
 opencode.json
+logs/*.log
 database/*.sqlite
 data/auditoria/*.csv
 data/referencia/*.geojson
 data/processados/*
+.~lock.*
 
 # UV lock is intentionally tracked; generated caches are not.
 .ruff_cache/

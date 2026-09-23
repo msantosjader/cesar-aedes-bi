@@ -35,6 +35,8 @@ aedes-bi/
 │   ├── referencia/
 │   │   └── recife.geojson
 │   ├── processados/
+│   │   ├── geocodificacao_cache.json
+│   │   └── inventario_geocodificacao.csv
 │   └── auditoria/
 │       ├── auditoria_coordenadas.csv
 │       └── auditoria_datas.csv
@@ -107,6 +109,13 @@ Responsabilidades:
 - detectar latitude e longitude invertidas;
 - validar pontos contra o limite municipal do Recife;
 - calcular distância até o limite municipal quando necessário;
+- separar endereço original em logradouro, número e complemento para consultas;
+- preservar o número do endereço nas consultas alternativas;
+- remover somente complementos como `CASA`, `EDF`, `AP` ou `BLOCO` em tentativas
+  alternativas;
+- gerar o inventário dos candidatos à geocodificação;
+- ignorar linhas de localização sem identificador e sem dados de localização,
+  registrando a decisão em `auditoria_registros.csv`;
 - gerar os DataFrames tratados;
 - gerar as tabelas de auditoria.
 
@@ -135,6 +144,7 @@ Responsabilidades:
 - detectar faixas inválidas;
 - detectar sinais invertidos;
 - detectar latitude e longitude trocadas;
+- separar latitude e longitude quando vierem na mesma célula;
 - corrigir automaticamente apenas casos inequívocos;
 - registrar toda correção na auditoria.
 
@@ -144,11 +154,32 @@ Validar coordenadas contra o limite do Recife obtido do IBGE. A classificação
 deve ser:
 
 - `dentro_recife`;
-- `fora_recife_proxima`, quando estiver fora e a até 500 metros do limite;
+- `fora_recife_proxima`, quando estiver fora e a até 1 km do limite;
 - `fora_recife`;
 - `sem_coordenada` ou equivalente quando não houver ponto válido.
 
 O ponto original e o resultado da validação devem permanecer rastreáveis.
+
+Pontos fora do Recife até 1 km devem ser mantidos para revisão manual e
+registrados na auditoria. Pontos sem coordenada ou fora do Recife a mais de 1
+km podem ser consultados por endereço, usando nome do local, endereço e bairro.
+Essa geocodificação é executada por padrão e pode ser desativada com
+`--sem-geocodificar`.
+
+Quando o endereço possui número, o número deve permanecer nas consultas. O
+complemento pode ser removido apenas em consultas alternativas. Não se deve
+buscar automaticamente apenas pelo nome da rua quando há número disponível.
+Para todo candidato à geocodificação, o endereço informado deve ser consultado
+primeiro, inclusive quando possui número. Se não houver resultado, o nome do
+estabelecimento pode ser usado como fallback, mantendo bairro e Recife na
+validação. O `nome_local` da própria linha pode ser usado como fallback
+nominal, sem lista prévia de nomes autorizados.
+O endereço original, as partes extraídas e todas as consultas devem permanecer
+no inventário `data/processados/inventario_geocodificacao.csv`.
+
+`regra_coordenada` e `status_geocodificacao` são decisões independentes. Uma
+falha de geocodificação não invalida nem apaga uma coordenada tratada com regra
+segura.
 
 ## `src/aedes_bi/load.py`
 
@@ -163,6 +194,7 @@ Responsabilidades:
 - criar índices úteis para consultas;
 - salvar as auditorias em `data/auditoria/`, quando essa responsabilidade
   estiver centralizada na carga.
+- salvar o inventário de geocodificação e o cache em `data/processados/`.
 
 O carregamento deve usar `sqlite3` ou `DataFrame.to_sql()`.
 
@@ -201,7 +233,9 @@ O banco deve conter, no mínimo, as tabelas:
 ### `edls`
 
 Um registro por estação disseminadora, incluindo identificação, distrito,
-endereço, coordenadas, dados originais e qualidade dos dados.
+endereço, coordenadas, situação, mês de retirada, dados originais e qualidade
+dos dados. Linhas de total devem ser ignoradas. Locais reais marcados como
+retirados devem permanecer com o mês de retirada quando essa informação existir.
 
 ### `ovitrampas`
 
@@ -239,6 +273,13 @@ Arquivos mínimos:
 
 - `data/auditoria/auditoria_coordenadas.csv`;
 - `data/auditoria/auditoria_datas.csv`.
+
+Também são gerados, quando o pipeline é executado:
+
+- `data/auditoria/auditoria_ids.csv`;
+- `data/auditoria/auditoria_registros.csv`;
+- `data/processados/inventario_geocodificacao.csv`;
+- `data/processados/geocodificacao_cache.json`.
 
 ## O Que Não Será Utilizado
 
